@@ -1,0 +1,18 @@
+# 免费节点订阅源（已实测可用）。增删源直接改这里。
+sources:
+  - name: NoMoreWalls(clash)
+    url: https://raw.githubusercontent.com/peasoft/NoMoreWalls/master/list.meta.yml
+  - name: NoMoreWalls(uri)
+    url: https://raw.githubusercontent.com/peasoft/NoMoreWalls/master/list.txt
+  - name: proxy-pool(clash)
+    url: https://raw.githubusercontent.com/yy1588133/proxy-pool/main/clash.yaml
+  - name: proxy-pool(uri)
+    url: https://raw.githubusercontent.com/yy1588133/proxy-pool/main/v2ray.txt
+  - name: MetaFetch(clash)
+    url: https://raw.githubusercontent.com/lanzm/MetaFetch/master/list.meta.yml
+  - name: FreeSubsCheck(clash)
+    url: https://raw.githubusercontent.com/kooker/FreeSubsCheck/main/mihomo.yaml
+  - name: freefq(uri)
+    url: https://raw.githubusercontent.com/freefq/free/master/v2
+  - name: AutoMergePublicNodes(uri)
+    url: https://raw.githubusercontent.com/chengaopan/AutoMergePublicNodes/master/list.txt
