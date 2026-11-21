@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 
-from freenodes.model import Node, is_valid_server
+from freenodes.credentials import fix_ss_password, repair_percent_encoding
+from freenodes.model import Node, is_valid_server, normalize_network
 
 _TYPE_MAP = {
     "shadowsocks": "ss",
@@ -29,6 +30,14 @@ def _str_at(mapping: dict[str, object], *keys: str) -> str | None:
         if isinstance(value, str) and value != "":
             return value
     return None
+
+
+def _cred_at(mapping: dict[str, object], *keys: str) -> str | None:
+    """读取凭证类字段（uuid / password / token / 公钥），并还原被 URL 转义的写法。"""
+    value = _str_at(mapping, *keys)
+    if value is None:
+        return None
+    return repair_percent_encoding(value)
 
 
 def _int_at(mapping: dict[str, object], *keys: str) -> int | None:
@@ -59,7 +68,7 @@ def _node_from_outbound(item: dict[str, object], source: str | None) -> Node | N
         return None
     tag = _str_at(item, "tag") or f"{protocol}-{server}:{port}"
     transport = _as_mapping(item.get("transport")) or {}
-    network = _str_at(transport, "type")
+    network = normalize_network(_str_at(transport, "type"))
     path = _str_at(transport, "path", "service_name")
     headers = _as_mapping(transport.get("headers")) or {}
     host = _str_at(headers, "Host", "host")
@@ -74,7 +83,7 @@ def _node_from_outbound(item: dict[str, object], source: str | None) -> Node | N
     utls = _as_mapping(tls_obj.get("utls")) or {}
     fingerprint = _str_at(utls, "fingerprint") or _str_at(tls_obj, "fingerprint")
     reality_obj = _as_mapping(tls_obj.get("reality")) or {}
-    reality_public_key = _str_at(reality_obj, "public_key") or _str_at(
+    reality_public_key = _cred_at(reality_obj, "public_key") or _cred_at(
         tls_obj, "reality_public_key", "public_key"
     )
     reality_short_id = _str_at(reality_obj, "short_id") or _str_at(tls_obj, "reality_short_id", "short_id")
@@ -96,29 +105,31 @@ def _node_from_outbound(item: dict[str, object], source: str | None) -> Node | N
         source=source,
     )
     if protocol == "ss":
-        common["method"] = _str_at(item, "method")
-        common["password"] = _str_at(item, "password")
+        method = _str_at(item, "method")
+        common["method"] = method
+        fixed = fix_ss_password(method, _str_at(item, "password"))
+        common["password"] = fixed.password if fixed is not None else None
     elif protocol == "ssr":
-        common["password"] = _str_at(item, "password")
+        common["password"] = _cred_at(item, "password")
         common["method"] = _str_at(item, "method")
     elif protocol == "vmess":
-        common["uuid"] = _str_at(item, "uuid")
+        common["uuid"] = _cred_at(item, "uuid")
         common["cipher"] = _str_at(item, "security") or "auto"
     elif protocol == "vless":
-        common["uuid"] = _str_at(item, "uuid")
+        common["uuid"] = _cred_at(item, "uuid")
         common["flow"] = _str_at(item, "flow")
         common["encryption"] = _str_at(item, "packet_encoding") or "none"
     elif protocol == "trojan":
-        common["password"] = _str_at(item, "password")
+        common["password"] = _cred_at(item, "password")
     elif protocol == "hysteria2":
-        common["password"] = _str_at(item, "password")
+        common["password"] = _cred_at(item, "password")
         obfs = _as_mapping(item.get("obfs"))
         if obfs:
             common["obfs"] = _str_at(obfs, "type")
-            common["obfs_password"] = _str_at(obfs, "password")
+            common["obfs_password"] = _cred_at(obfs, "password")
     elif protocol == "tuic":
-        common["uuid"] = _str_at(item, "uuid")
-        common["password"] = _str_at(item, "password")
+        common["uuid"] = _cred_at(item, "uuid")
+        common["password"] = _cred_at(item, "password")
     node_kwargs = {k: v for k, v in common.items() if v is not None}
     return Node(**node_kwargs)  # type: ignore[arg-type]
 

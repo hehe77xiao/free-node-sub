@@ -7,7 +7,8 @@ import binascii
 import json
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from freenodes.model import Node, is_valid_server
+from freenodes.credentials import fix_ss_password, repair_percent_encoding
+from freenodes.model import Node, is_valid_server, normalize_network
 
 
 def _b64url_decode(text: str) -> bytes:
@@ -75,7 +76,7 @@ def parse_vmess(rest: str, source: str | None) -> Node | None:
         uuid=user_id,
         aid=aid,
         cipher=str(cipher),
-        network=str(net),
+        network=normalize_network(str(net)) or "tcp",
         path=str(path) or None,
         host=str(host) or None,
         tls=tls,
@@ -87,7 +88,7 @@ def parse_vmess(rest: str, source: str | None) -> Node | None:
 def _parse_generic(rest: str, source: str | None, protocol: str) -> Node | None:
     split = urlsplit(f"//{rest}", allow_fragments=True)
     userinfo = split.username or ""
-    password = unquote(userinfo)
+    password = repair_percent_encoding(unquote(userinfo))
     server = split.hostname or ""
     if not is_valid_server(server) or not password:
         return None
@@ -99,7 +100,7 @@ def _parse_generic(rest: str, source: str | None, protocol: str) -> Node | None:
         return None
     params = parse_qs(split.query)
     name = unquote(split.fragment) if split.fragment else f"{protocol}-{server}"
-    network = _query_first(params, "type", "network") or "tcp"
+    network = normalize_network(_query_first(params, "type", "network")) or "tcp"
     path = _query_first(params, "path")
     host = _query_first(params, "host")
     security = (_query_first(params, "security") or "").lower()
@@ -161,7 +162,7 @@ def parse_vless(rest: str, source: str | None) -> Node | None:
         server=server,
         port=port,
         uuid=uuid,
-        network=_query_first(params, "type", "network") or "tcp",
+        network=normalize_network(_query_first(params, "type", "network")) or "tcp",
         path=_query_first(params, "path"),
         host=_query_first(params, "host"),
         tls=security in {"tls", "reality"},
@@ -227,13 +228,14 @@ def parse_ss(rest: str, source: str | None) -> Node | None:
     if not server or port is None or not is_valid_server(server):
         return None
     name = unquote(fragment) if fragment else f"ss-{server}"
+    fixed = fix_ss_password(method, password)
     return Node(
         name=name,
         protocol="ss",
         server=server,
         port=port,
         method=method,
-        password=password,
+        password=fixed.password if fixed is not None else None,
         source=source,
     )
 

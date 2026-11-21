@@ -107,7 +107,7 @@ def run_pipeline(options: RunOptions, log: Callable[[str], None] = print) -> Run
     options.out_dir.mkdir(parents=True, exist_ok=True)
     clash_text = clash.build_clash_yaml(alive, generated_at=now)
     (options.out_dir / CLASH_FILENAME).write_text(clash_text, encoding="utf-8")
-    singbox_text, stats.singbox_skipped = singbox.build_singbox_json(alive, generated_at=now)
+    singbox_text, stats.singbox_skipped = singbox.build_singbox_json(alive, generated_at=now, log=log)
     (options.out_dir / SINGBOX_FILENAME).write_text(singbox_text, encoding="utf-8")
 
     node_records = [

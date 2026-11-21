@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import yaml
 
-from freenodes.model import Node, is_valid_server
+from freenodes.credentials import fix_ss_password, repair_percent_encoding
+from freenodes.model import Node, is_valid_server, normalize_network
 
 _SUPPORTED_TYPES = {
     "ss": "ss",
@@ -33,6 +34,14 @@ def _str_at(mapping: dict[str, object], *keys: str) -> str | None:
         if isinstance(value, int):
             return str(value)
     return None
+
+
+def _cred_at(mapping: dict[str, object], *keys: str) -> str | None:
+    """读取凭证类字段（uuid / password / token），并还原被 URL 转义的写法。"""
+    value = _str_at(mapping, *keys)
+    if value is None:
+        return None
+    return repair_percent_encoding(value)
 
 
 def _int_at(mapping: dict[str, object], key: str) -> int | None:
@@ -78,7 +87,7 @@ def _node_from_mapping(item: dict[str, object], source: str | None) -> Node | No
     if not server or not is_valid_server(server) or port is None or port <= 0 or port > 65535:
         return None
     name = _str_at(item, "name") or f"{protocol}-{server}:{port}"
-    network = _str_at(item, "network")
+    network = normalize_network(_str_at(item, "network"))
     path = _str_at(item, "ws-path", "path", "h2-path")
     grpc_service = _str_at(item, "grpc-service-name")
     if grpc_service:
@@ -108,33 +117,35 @@ def _node_from_mapping(item: dict[str, object], source: str | None) -> Node | No
         source=source,
     )
     if protocol == "ss":
-        common["method"] = _str_at(item, "cipher", "method")
-        common["password"] = _str_at(item, "password")
+        method = _str_at(item, "cipher", "method")
+        common["method"] = method
+        fixed = fix_ss_password(method, _str_at(item, "password"))
+        common["password"] = fixed.password if fixed is not None else None
     elif protocol == "ssr":
-        common["password"] = _str_at(item, "password")
+        common["password"] = _cred_at(item, "password")
         common["method"] = _str_at(item, "cipher", "method")
         common["ssr_protocol"] = _str_at(item, "protocol")
         common["obfs"] = _str_at(item, "obfs")
         common["obfs_param"] = _str_at(item, "obfs-param")
     elif protocol == "vmess":
-        common["uuid"] = _str_at(item, "uuid")
+        common["uuid"] = _cred_at(item, "uuid")
         common["aid"] = _str_at(item, "alterId", "alter_id") or "0"
         common["cipher"] = _str_at(item, "cipher") or "auto"
     elif protocol == "vless":
-        common["uuid"] = _str_at(item, "uuid")
+        common["uuid"] = _cred_at(item, "uuid")
         common["flow"] = _str_at(item, "flow")
         common["encryption"] = _str_at(item, "client-encryption", "encryption") or "none"
         if _str_at(item, "security") == "reality":
             common["tls"] = True
     elif protocol == "trojan":
-        common["password"] = _str_at(item, "password")
+        common["password"] = _cred_at(item, "password")
     elif protocol == "hysteria2":
-        common["password"] = _str_at(item, "password")
+        common["password"] = _cred_at(item, "password")
         common["obfs"] = _str_at(item, "obfs")
-        common["obfs_password"] = _str_at(item, "obfs-password")
+        common["obfs_password"] = _cred_at(item, "obfs-password")
     elif protocol == "tuic":
-        common["uuid"] = _str_at(item, "uuid")
-        common["password"] = _str_at(item, "password") or _str_at(item, "token")
+        common["uuid"] = _cred_at(item, "uuid")
+        common["password"] = _cred_at(item, "password") or _cred_at(item, "token")
     node_kwargs = {k: v for k, v in common.items() if v is not None}
     return Node(**node_kwargs)  # type: ignore[arg-type]
 

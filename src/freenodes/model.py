@@ -7,6 +7,25 @@ from typing import Literal
 
 Protocol = Literal["ss", "ssr", "vmess", "vless", "trojan", "hysteria2", "tuic"]
 
+# 各内核对同一种传输的不同叫法，统一归一化成 mihomo 风格写法。
+# "raw" 是 v2fly / sing-box 对 TCP 传输的新称呼，mihomo、meow(Satelite 的 clash 内核)都不认，
+# 会报 unsupported transport: raw；"plain" / "direct" 是 sing-box 对直连 TCP 传输的旧 / 新称呼。
+_NETWORK_ALIASES: dict[str, str] = {
+    "raw": "tcp",
+    "plain": "tcp",
+    "direct": "tcp",
+}
+
+
+def normalize_network(value: str | None) -> str | None:
+    """把传输别名字段归一化（如 raw → tcp）；空值返回 None。"""
+    if value is None:
+        return None
+    lowered = value.strip().lower()
+    if not lowered:
+        return None
+    return _NETWORK_ALIASES.get(lowered, lowered)
+
 
 @dataclass(frozen=True)
 class Node:

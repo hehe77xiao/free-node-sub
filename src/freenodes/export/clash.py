@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 import yaml
 
-from freenodes.model import Node
+from freenodes.model import Node, normalize_network
 from freenodes.region import Region, detect_region
 
 SELECT_GROUP = "🚀 节点选择"
@@ -82,9 +82,10 @@ def _proxy_dict(node: Node, tag: str) -> dict[str, object]:
         proxy["password"] = node.password or ""
         if node.sni:
             proxy["sni"] = node.sni
-    if node.network and node.protocol not in ("hysteria2", "tuic", "ss", "ssr"):
-        proxy["network"] = node.network
-        if node.path and node.network != "grpc":
+    network = normalize_network(node.network)
+    if network and node.protocol not in ("hysteria2", "tuic", "ss", "ssr"):
+        proxy["network"] = network
+        if node.path and network != "grpc":
             proxy["path"] = node.path
         elif node.path:
             proxy["grpc-service-name"] = node.path

@@ -59,6 +59,27 @@ proxies:
     assert protocols == {"vmess", "hysteria2"}
 
 
+def test_decode_clash_yaml_network_raw_normalized() -> None:
+    content = """
+proxies:
+  - name: US-raw
+    type: vless
+    server: raw.example.com
+    port: 28190
+    uuid: 11111111-2222-3333-4444-555555555555
+    network: raw
+    tls: true
+    security: reality
+    reality-opts:
+      public-key: pk
+      short-id: ''
+"""
+    result = decode_content(content, "src")
+    assert result.format_name == "clash_yaml"
+    assert len(result.nodes) == 1
+    assert result.nodes[0].network == "tcp"
+
+
 def test_decode_singbox_outbounds() -> None:
     content = """
 {
@@ -78,6 +99,20 @@ def test_decode_singbox_outbounds() -> None:
     assert node.protocol == "vless"
     assert node.reality_public_key == "pk"
     assert node.reality_short_id == "si"
+
+
+def test_decode_singbox_transport_raw_normalized() -> None:
+    content = """
+{
+  "outbounds": [
+    {"type": "vless", "tag": "raw-1", "server": "r.example.com", "server_port": 443,
+     "uuid": "11111111-2222-3333-4444-555555555555", "transport": {"type": "raw"}}
+  ]
+}
+"""
+    result = decode_content(content, "src")
+    assert result.format_name == "singbox_json"
+    assert result.nodes[0].network == "tcp"
 
 
 def test_decode_garbage_returns_empty() -> None:

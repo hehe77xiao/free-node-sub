@@ -48,10 +48,46 @@ uv run python -m freenodes update --sources config/sources.yaml --out output
 
 导出兼容性（已用 Satelite 自带内核二进制校验：`mihomo -t` 与 `sing-box check` 均通过）：
 
-- sing-box 导出会跳过它不支持的条目：`ssr` 协议、`xhttp` / `raw` 等传输扩展
-  （Satelite 内嵌 sing-box 1.14.1 未编译这些扩展）；非法 `flow` / 指纹 / `packet_encoding` 会被安全省略
-- Clash 导出保留全部协议（mihomo 支持 ssr、xhttp 等）
+- sing-box 是「任一 outbound 初始化失败 → `sing-box check` 整体退出 1」，一个坏节点就让整份订阅在
+  Satelite 里全不可用；Clash 内核（Satelite 自带的其实是 meow-rs 0.28.0）遇到坏节点只 WARN 后丢弃。
+  所以 sing-box 导出必须自己把关，以下都是实测 sing-box 1.14.1 的行为：
+
+  - SS 口令被 URL 转义（`...%3D`）→ `decode key: illegal base64 data at input byte 43`：解析阶段还原
+  - `2022-blake3-*` 口令丢掉 `=` padding、或改用 base64url 字母表 → 同样报 `decode key`：自动补齐 / 转换
+  - `2022-blake3-*` 口令解码后长度不符（required 16/32 字节）→ `bad key length`：跳过并打印原因
+  - SS 加密方式不在内核支持列表（`salsa20` / `chacha20` / `table` / `2022-blake3-chacha8-poly1305` …）
+    → `unknown method`：跳过（支持清单见 `_SS_METHODS`，逐个用内核验证过）
+  - SS 没有口令 → `missing password`：跳过
+  - reality `public_key` 带 padding 或用标准字母表 → `decode public_key: illegal base64 data at input byte 43`：
+    归一化为 base64url + 无 padding（sing-box 只认这种写法）
+  - reality `short_id` 非 hex / 奇数长度 / 超过 8 字节 → `decode short_id`，过长的甚至会让 sing-box panic
+    退出 2：跳过
+  - hysteria2 `obfs` 是未知类型（只有 `salamander`）→ `unknown obfs type`，属配置级错误：跳过
+  - tuic 没有 `tls` → `TLS required`：强制 `tls.enabled: true`
+  - `ssr` 协议、`xhttp` 等未编译的传输扩展：跳过；传输别名 `raw` / `plain` / `direct`（v2fly、
+    sing-box 对 TCP 传输的不同叫法）统一归一化为 `tcp`，Satelite 的 meow 内核不认 `raw`
+    （导入报 `unsupported transport: raw`）；非法 `flow` / 指纹 / `packet_encoding` 安全省略
+- Clash 导出保留全部协议（mihomo 支持 ssr、xhttp 等），但注意 Satelite 的 clash 内核是 meow，
+  对 `flow`、vmess 传输、非 UUID 的 uuid 更严格，遇到只会 WARN 并丢弃该节点
 - 两份文件都会被本项目解析器原样读回（回环测试）
+
+## 导出文件排错
+
+Satelite 报 `core error: sing-box check failed` 时，用它的内核直接复现并定位是哪一个节点：
+
+```bash
+SB="$HOME/Library/Application Support/com.satelite.proxy/bin/sing-box"
+"$SB" check -c output/satelite-singbox.json
+# FATAL[...] initialize outbound[710]: decode key: illegal base64 data at input byte 43
+```
+
+`outbound[N]` 的下标就是 `satelite-singbox.json` 里 `outbounds` 数组的第 N 个（Satelite 自己的 outbound
+会让下标略有偏移）。Clash 文件同理（meow 只会 WARN，不会失败）：
+
+```bash
+MH="$HOME/Library/Application Support/com.satelite.proxy/bin/mihomo"
+mkdir -p /tmp/cl && cp output/satelite-clash.yaml /tmp/cl/config.yaml && "$MH" -t -d /tmp/cl
+```
 
 ## 导入 Satelite（一次性操作）
 

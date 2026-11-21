@@ -52,6 +52,17 @@ def test_parse_vless_reality() -> None:
     assert node.tls is True
 
 
+def test_parse_vless_type_raw_normalized_to_tcp() -> None:
+    link = (
+        "vless://aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        "@1.2.3.4:28190?encryption=none&security=reality&sni=aws.amazon.com"
+        "&fp=chrome&pb=abc123&flow=xtls-rprx-vision&type=raw#US-raw"
+    )
+    node = uri.parse_share_link(link, "test")
+    assert node is not None
+    assert node.network == "tcp"
+
+
 def test_parse_ss_sip002() -> None:
     cred = base64.urlsafe_b64encode(b"aes-256-gcm:my$pass").decode().rstrip("=")
     link = f"ss://{cred}@ss.example.com:8388#Tokyo"
